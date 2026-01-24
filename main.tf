@@ -13,6 +13,18 @@ variable "zp_module_id" {
   description = "Unique identifier for this module instance (user-defined, freeform)"
 }
 
+variable "zp_arch" {
+  type        = string
+  default     = "amd64"
+  description = "Target architecture - amd64, arm64, etc. (injected by zeropoint)"
+}
+
+variable "zp_gpu_vendor" {
+  type        = string
+  default     = ""
+  description = "GPU vendor - nvidia, amd, intel, or empty for no GPU (injected by zeropoint)"
+}
+
 variable "zp_network_name" {
   type        = string
   description = "Pre-created Docker network name for this module (managed by zeropoint)"
@@ -47,9 +59,16 @@ variable "zp_db_port" {
   description = "Internal Postgres port exposed on the Docker network"
 }
 
+locals {
+  # Map the injected architecture to a Docker platform string used when pulling images.
+  # Common values: "amd64" -> "linux/amd64", "arm64" -> "linux/arm64".
+  image_platform = var.zp_arch == "arm64" ? "linux/arm64" : "linux/amd64"
+}
+
 # Pull the official Postgres image
 resource "docker_image" "postgres" {
   name = "postgres:17"
+  platform = local.image_platform
   keep_locally = true
 }
 
