@@ -53,12 +53,6 @@ variable "zp_db_name" {
   description = "Postgres database name"
 }
 
-variable "zp_db_port" {
-  type        = number
-  default     = 5432
-  description = "Internal Postgres port exposed on the Docker network"
-}
-
 locals {
   # Map the injected architecture to a Docker platform string used when pulling images.
   # Common values: "amd64" -> "linux/amd64", "arm64" -> "linux/arm64".
@@ -105,20 +99,20 @@ output "main" {
 output "main_ports" {
   value = {
     postgres = {
-      port        = var.zp_db_port
-      protocol    = "postgres"
+      port        = 5432
+      protocol    = "tcp"
       transport   = "tcp"
-      description = "Postgres database port (internal to Docker network)"
+      description = "Postgres database port"
       default     = true
     }
   }
-  description = "Service ports for external access (metadata only)"
+  description = "Service ports for external access"
 }
 
 output "postgres_connection" {
   value = {
     host     = docker_container.postgres_main.name
-    port     = var.zp_db_port
+    port     = 5432
     user     = var.zp_db_user
     password = var.zp_db_password
     database = var.zp_db_name
