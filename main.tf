@@ -116,7 +116,7 @@ output "postgres_connection" {
     user     = var.zp_db_user
     password = var.zp_db_password
     database = var.zp_db_name
-    uri      = "postgresql://${var.zp_db_user}:${var.zp_db_password}@${docker_container.postgres_main.name}:${var.zp_db_port}/${var.zp_db_name}"
+    uri      = "postgresql://${var.zp_db_user}:${var.zp_db_password}@${docker_container.postgres_main.name}:5432/${var.zp_db_name}"
   }
   description = "Connection information usable by other zeropoint modules"
 }
