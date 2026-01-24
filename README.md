@@ -1,33 +1,27 @@
-# Ollama zeropoint app
+# Postgres zeropoint module
 
-This module defines the Ollama app for zeropoint os using Terraform and the Docker provider.
+This Terraform module brings up a Postgres database container on a pre-created Docker network for use by other zeropoint modules.
 
 ## Resources Created
 
-- **Docker Image**: Builds from local `Dockerfile` with platform-specific targeting
-- **Docker Container**: Ollama server with optional GPU support
+- **Docker Image**: pulls `postgres:15`
+- **Docker Container**: Postgres database joined to the provided Docker network
 
 ## Requirements
 
 - Terraform >= 1.0
 - Docker provider ~> 3.0
-- GPU support (optional):
-  - NVIDIA: NVIDIA Container Runtime
-  - AMD: ROCm drivers
-  - Intel: Intel GPU drivers
 
 ## Usage
 
-### Via zeropoint API
+Install via zeropoint API by specifying module source and required variables (zeropoint injects values):
 
 ```bash
 curl -X POST http://<zeropoint-node-name>:2370/modules/install \
   -H "Content-Type: application/json" \
   -d '{
-    "source": "https://github.com/zeropoint-os/ollama.git", 
-    "module_id": "ollama",
-    "arch": "arm64",
-    "gpu_vendor": "nvidia"
+    "source": "https://github.com/zeropoint-os/postgres-module.git", 
+    "module_id": "postgres"
   }'
 ```
 
@@ -37,51 +31,42 @@ Use Run task (Shift+Alt+T)
 1. Full test - setup and apply
 2. Full test - cleanup
 
-The install will be performed using Docker-in-Docker.
-
 ## Inputs
 
 | Name | Type | Description | Default |
 |------|------|-------------|---------|
-| `zp_app_id` | string | Unique identifier for this app instance (injected by zeropoint) | `"ollama"` |
+| `zp_module_id` | string | Unique identifier for this module instance | `"postgres"` |
 | `zp_network_name` | string | Pre-created Docker network name (injected by zeropoint) | (required) |
-| `zp_arch` | string | Target architecture: amd64, arm64, etc. (injected by zeropoint) | `"amd64"` |
-| `zp_gpu_vendor` | string | GPU vendor: nvidia, amd, intel, or empty for no GPU (injected by zeropoint) | `""` |
 | `zp_module_storage` | string | Host path for persistent storage (injected by zeropoint) | (required) |
+| `zp_db_user` | string | Postgres user | `"postgres"` |
+| `zp_db_password` | string | Postgres password | `"postgres"` (override in production) |
+| `zp_db_name` | string | Postgres database name | `"postgres"` |
+| `zp_db_port` | number | Internal Postgres port | `5432` |
 
 ## Outputs
 
 | Name | Description |
 |------|-------------|
-| `main` | Main Ollama container resource (docker_container) |
-
-## GPU Support
-
-This module supports multiple GPU vendors:
-
-- **NVIDIA**: Sets `runtime = "nvidia"` and `gpus = "all"`
-- **AMD/Intel**: Sets `gpus = "all"` (uses default runtime with device access)
-- **No GPU**: Both runtime and gpus set to null (CPU-only mode)
-
-The GPU vendor is auto-detected by zeropoint and injected via the `gpu_vendor` variable.
+| `main` | The Docker container resource for Postgres |
+| `main_ports` | Metadata describing the internal Postgres port (5432) |
+| `postgres_connection` | Map with `host`, `port`, `user`, `password`, `database`, and `uri` usable by other modules |
 
 ## Network & Service Discovery
 
-- **Internal Port**: 11434 (Ollama API)
+- **Internal Port**: 5432 (Postgres)
 - **Network**: Uses pre-created network provided by zeropoint via `zp_network_name`
-- **No Host Ports**: Service discovery via DNS only
-- **Container Name**: `${zp_module_id}-main` (e.g., `ollama-main`)
+- **No Host Ports**: Service discovery via Docker DNS only; other containers can reach the DB at `<module_id>-main:5432`
 
-## Accessing Ollama
+## Test
 
-### From Other Containers (Service Discovery)
+Use Run Task...
 
-Other apps linked to Ollama can access it via DNS:
+After `Full test: Setup and apply`, run the included test script to validate connectivity:
 
 ```bash
-curl http://ollama-main:11434/api/tags
+bash postgres-test.sh
 ```
 
-### From Host (via Exposure)
+This script will attempt a simple `psql` query inside the running Postgres container.
 
-External access requires creating an exposure through zeropoint API.
+You can then clean up using the task: `Full test: Cleanup`

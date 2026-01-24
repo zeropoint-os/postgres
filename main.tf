@@ -9,25 +9,13 @@ terraform {
 
 variable "zp_module_id" {
   type        = string
-  default     = "ollama"
+  default     = "postgres"
   description = "Unique identifier for this module instance (user-defined, freeform)"
 }
 
- variable "zp_network_name" {
+variable "zp_network_name" {
   type        = string
   description = "Pre-created Docker network name for this module (managed by zeropoint)"
-}
-
-variable "zp_arch" {
-  type        = string
-  default     = "amd64"
-  description = "Target architecture - amd64, arm64, etc. (injected by zeropoint)"
-}
-
-variable "zp_gpu_vendor" {
-  type        = string
-  default     = ""
-  description = "GPU vendor - nvidia, amd, intel, or empty for no GPU (injected by zeropoint)"
 }
 
 variable "zp_module_storage" {
@@ -35,71 +23,87 @@ variable "zp_module_storage" {
   description = "Host path for persistent storage (injected by zeropoint)"
 }
 
-# Build Ollama image from local Dockerfile
-resource "docker_image" "ollama" {
-  name = "${var.zp_module_id}:latest"
-  build {
-    context    = path.module
-    dockerfile = "Dockerfile"
-    platform   = "linux/${var.zp_arch}"  # Uses injected zp_arch variable
-  }
+variable "zp_db_user" {
+  type        = string
+  default     = "postgres"
+  description = "Postgres user to create/use"
+}
+
+variable "zp_db_password" {
+  type        = string
+  description = "Postgres user password (injected or provided)"
+  default     = "postgres"
+}
+
+variable "zp_db_name" {
+  type        = string
+  default     = "postgres"
+  description = "Postgres database name"
+}
+
+variable "zp_db_port" {
+  type        = number
+  default     = 5432
+  description = "Internal Postgres port exposed on the Docker network"
+}
+
+# Pull the official Postgres image
+resource "docker_image" "postgres" {
+  name = "postgres:17"
   keep_locally = true
 }
 
-# Main Ollama container (no host port binding)
-resource "docker_container" "ollama_main" {
+# Main Postgres container (joined to zeropoint network, no host port binding)
+resource "docker_container" "postgres_main" {
   name  = "${var.zp_module_id}-main"
-  image = docker_image.ollama.image_id
+  image = docker_image.postgres.image_id
 
-  # Network configuration (provided by zeropoint)
   networks_advanced {
     name = var.zp_network_name
   }
 
-  # Restart policy
   restart = "unless-stopped"
 
-  # GPU access (conditional based on vendor)
-  runtime = var.zp_gpu_vendor == "nvidia" ? "nvidia" : null
-  gpus    = var.zp_gpu_vendor != "" ? "all" : null
-
-  # Environment variables
   env = [
-    "OLLAMA_HOST=0.0.0.0",
+    "POSTGRES_USER=${var.zp_db_user}",
+    "POSTGRES_PASSWORD=${var.zp_db_password}",
+    "POSTGRES_DB=${var.zp_db_name}",
   ]
 
-  # Persistent storage
   volumes {
-    host_path      = "${var.zp_module_storage}/.ollama"
-    container_path = "/root/.ollama"
+    host_path      = "${var.zp_module_storage}/postgres"
+    container_path = "/var/lib/postgresql/data"
   }
 
-  # Ports exposed internally (no host binding)
-  # Port 11434 is accessible via service discovery (DNS)
+  # No host port binding; services access Postgres via the Docker network.
 }
 
-# Outputs for zeropoint (container resource only)
 output "main" {
-  value       = docker_container.ollama_main
-  description = "Main Ollama container"
+  value       = docker_container.postgres_main
+  description = "Main Postgres container resource"
 }
 
-# Service ports for external access (defined but not bound to host)
 output "main_ports" {
   value = {
-    api = {
-      port        = 11434                   # Ollama API port
-      protocol    = "http"                  # The protocol used
-      transport   = "tcp"                   # Transport layer
-      description = "Ollama API endpoint"   # Description of the port
-      default     = true                    # Default port for the service
+    postgres = {
+      port        = var.zp_db_port
+      protocol    = "postgres"
+      transport   = "tcp"
+      description = "Postgres database port (internal to Docker network)"
+      default     = true
     }
   }
-  description = "Service ports for external access"
+  description = "Service ports for external access (metadata only)"
 }
 
-# Ollama API URL for easy consumption by other modules
-output "ollama_api_url" {
-  value       = "http://${docker_container.ollama_main.name}:11434"
-  description = "Ollama API URL accessible via Docker network"
+output "postgres_connection" {
+  value = {
+    host     = docker_container.postgres_main.name
+    port     = var.zp_db_port
+    user     = var.zp_db_user
+    password = var.zp_db_password
+    database = var.zp_db_name
+    uri      = "postgresql://${var.zp_db_user}:${var.zp_db_password}@${docker_container.postgres_main.name}:${var.zp_db_port}/${var.zp_db_name}"
+  }
+  description = "Connection information usable by other zeropoint modules"
 }
