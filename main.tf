@@ -30,9 +30,14 @@ variable "zp_network_name" {
   description = "Pre-created Docker network name for this module (managed by zeropoint)"
 }
 
-variable "zp_module_storage" {
+variable "zp_module_dir" {
   type        = string
-  description = "Host path for persistent storage (injected by zeropoint)"
+  description = "Agent's working directory for this module (injected by zeropoint). Terraform state and the cloned source live here. Users may edit this — the agent moves the directory atomically."
+}
+
+variable "zp_storage_dir" {
+  type        = string
+  description = "Isolated data root for this module (injected by zeropoint). All bind mounts MUST be under this path so the agent can move user data when zp_storage_dir is edited (atomic same-fs, rsync-and-swap cross-fs)."
 }
 
 variable "zp_db_user" {
@@ -84,7 +89,7 @@ resource "docker_container" "postgres_main" {
   ]
 
   volumes {
-    host_path      = "${var.zp_module_storage}/postgres"
+    host_path      = "${var.zp_storage_dir}/postgres"
     container_path = "/var/lib/postgresql/data"
   }
 

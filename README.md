@@ -37,7 +37,8 @@ Use Run task (Shift+Alt+T)
 |------|------|-------------|---------|
 | `zp_module_id` | string | Unique identifier for this module instance | `"postgres"` |
 | `zp_network_name` | string | Pre-created Docker network name (injected by zeropoint) | (required) |
-| `zp_module_storage` | string | Host path for persistent storage (injected by zeropoint) | (required) |
+| `zp_module_dir` | string | Agent's working directory for this module — terraform state + cloned source (injected by zeropoint) | (required) |
+| `zp_storage_dir` | string | Isolated data root for this module — all bind mounts must live under here (injected by zeropoint) | (required) |
 | `zp_db_user` | string | Postgres user | `"postgres"` |
 | `zp_db_password` | string | Postgres password | `"postgres"` (override in production) |
 | `zp_db_name` | string | Postgres database name | `"postgres"` |
